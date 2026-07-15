@@ -62,6 +62,42 @@ class ChatControllerTest {
 	}
 
 	@Test
+	void acceptsFrontendMessagesPayload() throws Exception {
+		mockMvc.perform(post("/api/chat")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "messages": [
+								    {
+								      "role": "user",
+								      "content": "How should I think about assets?"
+								    }
+								  ]
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.role").value("ASSISTANT"))
+				.andExpect(jsonPath("$.message").value("The chat API is ready. RAG retrieval and Gemini generation will be connected next."));
+	}
+
+	@Test
+	void rejectsMessagesPayloadWithoutUserContent() throws Exception {
+		mockMvc.perform(post("/api/chat")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "messages": [
+								    {
+								      "role": "assistant",
+								      "content": "Previous reply"
+								    }
+								  ]
+								}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void rejectsBlankMessage() throws Exception {
 		mockMvc.perform(post("/api/chat")
 						.contentType(MediaType.APPLICATION_JSON)

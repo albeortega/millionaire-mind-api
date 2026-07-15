@@ -59,6 +59,19 @@ Request body:
 }
 ```
 
+The endpoint also accepts the frontend chat history payload:
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "User question"
+    }
+  ]
+}
+```
+
 Response body:
 
 ```json
