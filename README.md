@@ -22,6 +22,7 @@ Required environment variables:
 DB_URL=jdbc:postgresql://db.your-project-ref.supabase.co:5432/postgres
 DB_USERNAME=postgres
 DB_PASSWORD=your_supabase_database_password
+APP_CORS_ALLOWED_ORIGINS=http://localhost:3000,https://your-frontend-domain.com
 ```
 
 Gemini and PDF ingestion are intentionally not implemented yet.
@@ -39,6 +40,41 @@ Expected response:
   "status": "UP",
   "application": "millionaire-mind-api"
 }
+```
+
+## Chat API
+
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"What is the first millionaire mind principle?"}'
+```
+
+Request body:
+
+```json
+{
+  "conversationId": "optional-existing-conversation-uuid",
+  "message": "User question"
+}
+```
+
+Response body:
+
+```json
+{
+  "conversationId": "generated-or-existing-conversation-uuid",
+  "role": "ASSISTANT",
+  "message": "The chat API is ready. RAG retrieval and Gemini generation will be connected next.",
+  "sources": [],
+  "createdAt": "2026-07-14T00:00:00Z"
+}
+```
+
+Production frontend URL:
+
+```text
+https://millionaire-mind-api.onrender.com/api/chat
 ```
 
 ## Tests
