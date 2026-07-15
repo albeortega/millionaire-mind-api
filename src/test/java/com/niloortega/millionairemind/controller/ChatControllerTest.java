@@ -3,6 +3,8 @@ package com.niloortega.millionairemind.controller;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -10,7 +12,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.niloortega.millionairemind.config.CorsConfig;
+import com.niloortega.millionairemind.dto.ChatRequest;
+import com.niloortega.millionairemind.dto.ChatResponse;
 import com.niloortega.millionairemind.service.ChatService;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -18,15 +26,33 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(ChatController.class)
-@Import({ChatService.class, CorsConfig.class})
+@Import(CorsConfig.class)
 @ActiveProfiles("test")
 class ChatControllerTest {
 
+	private static final String ASSISTANT_REPLY =
+			"The chat API is ready. RAG retrieval and Gemini generation will be connected next.";
+	private static final UUID DEFAULT_CONVERSATION_ID = UUID.fromString("f3b18c5c-c9cc-4791-a55b-3975c67c5b85");
+	private static final Instant CREATED_AT = Instant.parse("2026-07-15T00:00:00Z");
+
 	@Autowired
 	private MockMvc mockMvc;
+
+	@MockitoBean
+	private ChatService chatService;
+
+	@BeforeEach
+	void setUp() {
+		when(chatService.reply(any(ChatRequest.class))).thenAnswer(invocation -> {
+			ChatRequest request = invocation.getArgument(0);
+			UUID conversationId = request.conversationId() == null ? DEFAULT_CONVERSATION_ID : request.conversationId();
+			return new ChatResponse(conversationId, "ASSISTANT", ASSISTANT_REPLY, List.of(), CREATED_AT);
+		});
+	}
 
 	@Test
 	void returnsChatResponseForNewConversation() throws Exception {
@@ -40,7 +66,7 @@ class ChatControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.conversationId", notNullValue()))
 				.andExpect(jsonPath("$.role").value("ASSISTANT"))
-				.andExpect(jsonPath("$.message").value("The chat API is ready. RAG retrieval and Gemini generation will be connected next."))
+				.andExpect(jsonPath("$.message").value(ASSISTANT_REPLY))
 				.andExpect(jsonPath("$.sources", is(empty())))
 				.andExpect(jsonPath("$.createdAt", notNullValue()));
 	}
@@ -74,10 +100,10 @@ class ChatControllerTest {
 								    }
 								  ]
 								}
-								"""))
+				"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.role").value("ASSISTANT"))
-				.andExpect(jsonPath("$.message").value("The chat API is ready. RAG retrieval and Gemini generation will be connected next."));
+				.andExpect(jsonPath("$.message").value(ASSISTANT_REPLY));
 	}
 
 	@Test

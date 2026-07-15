@@ -90,6 +90,8 @@ Production frontend URL:
 https://millionaire-mind-api.onrender.com/api/chat
 ```
 
+Chat requests persist conversation history to the `conversations` and `messages` tables. The response returns the conversation ID the frontend should keep sending for follow-up turns.
+
 ## Tests
 
 ```bash
