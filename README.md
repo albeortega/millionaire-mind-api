@@ -24,7 +24,7 @@ DB_USERNAME=postgres
 DB_PASSWORD=your_supabase_database_password
 APP_CORS_ALLOWED_ORIGINS=http://localhost:3000,https://your-frontend-domain.com
 GEMINI_API_KEY=your_google_ai_studio_api_key
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.1-flash-lite
 ```
 
 Gemini is optional at runtime. If `GEMINI_API_KEY` is not set, chat falls back to a local response composed from retrieved book chunks. Google currently offers a Gemini API free tier for certain models, including Flash-family models, but free-tier usage has rate limits and Google states free-tier content may be used to improve its products.

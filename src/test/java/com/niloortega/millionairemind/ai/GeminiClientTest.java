@@ -19,9 +19,9 @@ class GeminiClientTest {
 		RestClient.Builder restClientBuilder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
 		GeminiClient geminiClient =
-				new GeminiClient(restClientBuilder, "test-api-key", "gemini-2.0-flash", "https://gemini.test/v1beta");
+				new GeminiClient(restClientBuilder, "test-api-key", "gemini-3.1-flash-lite", "https://gemini.test/v1beta");
 
-		server.expect(requestTo("https://gemini.test/v1beta/models/gemini-2.0-flash:generateContent?key=test-api-key"))
+		server.expect(requestTo("https://gemini.test/v1beta/models/gemini-3.1-flash-lite:generateContent?key=test-api-key"))
 				.andExpect(method(HttpMethod.POST))
 				.andRespond(withSuccess("""
 						{

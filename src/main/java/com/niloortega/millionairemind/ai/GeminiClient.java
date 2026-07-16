@@ -24,7 +24,7 @@ public class GeminiClient {
 	public GeminiClient(
 			RestClient.Builder restClientBuilder,
 			@Value("${app.gemini.api-key:}") String apiKey,
-			@Value("${app.gemini.model:gemini-2.0-flash}") String model,
+			@Value("${app.gemini.model:gemini-3.1-flash-lite}") String model,
 			@Value("${app.gemini.api-url:https://generativelanguage.googleapis.com/v1beta}") String apiUrl) {
 		this.restClient = restClientBuilder.build();
 		this.apiKey = apiKey;
