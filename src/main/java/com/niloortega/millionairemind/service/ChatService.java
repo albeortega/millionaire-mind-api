@@ -1,5 +1,6 @@
 package com.niloortega.millionairemind.service;
 
+import com.niloortega.millionairemind.ai.GeminiClient;
 import com.niloortega.millionairemind.dto.ChatRequest;
 import com.niloortega.millionairemind.dto.ChatResponse;
 import com.niloortega.millionairemind.dto.ChatSource;
@@ -27,6 +28,7 @@ public class ChatService {
 	private static final String NO_DATA_REPLY =
 			"I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.";
 
+	private final GeminiClient geminiClient;
 	private final BookChunkRepository bookChunkRepository;
 	private final ConversationRepository conversationRepository;
 	private final MessageRepository messageRepository;
@@ -34,17 +36,20 @@ public class ChatService {
 
 	@Autowired
 	public ChatService(
+			GeminiClient geminiClient,
 			BookChunkRepository bookChunkRepository,
 			ConversationRepository conversationRepository,
 			MessageRepository messageRepository) {
-		this(bookChunkRepository, conversationRepository, messageRepository, Clock.systemUTC());
+		this(geminiClient, bookChunkRepository, conversationRepository, messageRepository, Clock.systemUTC());
 	}
 
 	ChatService(
+			GeminiClient geminiClient,
 			BookChunkRepository bookChunkRepository,
 			ConversationRepository conversationRepository,
 			MessageRepository messageRepository,
 			Clock clock) {
+		this.geminiClient = geminiClient;
 		this.bookChunkRepository = bookChunkRepository;
 		this.conversationRepository = conversationRepository;
 		this.messageRepository = messageRepository;
@@ -59,7 +64,7 @@ public class ChatService {
 
 		messageRepository.save(new MessageEntity(conversation, MessageRole.USER, prompt, createdAt));
 		List<BookChunkSearchResult> matchingChunks = searchChunks(prompt);
-		String reply = composeReply(matchingChunks);
+		String reply = generateReply(prompt, matchingChunks);
 		List<ChatSource> sources = matchingChunks.stream()
 				.map(chunk -> new ChatSource(
 						chunk.getBookTitle() + " - chunk " + chunk.getChunkIndex(),
@@ -84,6 +89,19 @@ public class ChatService {
 		}
 
 		return bookChunkRepository.findFirstChunks(MAX_SOURCES);
+	}
+
+	private String generateReply(String prompt, List<BookChunkSearchResult> chunks) {
+		if (chunks.isEmpty()) {
+			return NO_DATA_REPLY;
+		}
+
+		List<String> contextChunks = chunks.stream()
+				.map(BookChunkSearchResult::getContent)
+				.toList();
+
+		return geminiClient.generateAnswer(prompt, contextChunks)
+				.orElseGet(() -> composeReply(chunks));
 	}
 
 	private String composeReply(List<BookChunkSearchResult> chunks) {

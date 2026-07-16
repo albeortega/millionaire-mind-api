@@ -10,7 +10,7 @@ Private Spring Boot API for the Millionaire Mind iPhone app. The app will answer
 - Supabase PostgreSQL
 - Flyway migrations
 - pgvector
-- Future Google Gemini integration
+- Google Gemini integration
 
 ## Local Configuration
 
@@ -23,9 +23,11 @@ DB_URL=jdbc:postgresql://db.your-project-ref.supabase.co:5432/postgres
 DB_USERNAME=postgres
 DB_PASSWORD=your_supabase_database_password
 APP_CORS_ALLOWED_ORIGINS=http://localhost:3000,https://your-frontend-domain.com
+GEMINI_API_KEY=your_google_ai_studio_api_key
+GEMINI_MODEL=gemini-3.1-flash-lite
 ```
 
-Gemini and PDF ingestion are intentionally not implemented yet.
+Gemini is optional at runtime. If `GEMINI_API_KEY` is not set, chat falls back to a local response composed from retrieved book chunks. Google currently offers a Gemini API free tier for certain models, including Flash-family models, but free-tier usage has rate limits and Google states free-tier content may be used to improve its products.
 
 ## Health Check
 
@@ -78,8 +80,14 @@ Response body:
 {
   "conversationId": "generated-or-existing-conversation-uuid",
   "role": "ASSISTANT",
-  "message": "I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.",
-  "sources": [],
+  "message": "Generated or fallback answer grounded in saved book chunks.",
+  "sources": [
+    {
+      "title": "Jewels of the Millionaire Mind - chunk 8",
+      "excerpt": "Before you decide, pause and ask...",
+      "score": 0.75
+    }
+  ],
   "createdAt": "2026-07-14T00:00:00Z"
 }
 ```

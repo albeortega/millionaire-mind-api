@@ -2,10 +2,12 @@ package com.niloortega.millionairemind.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.niloortega.millionairemind.ai.GeminiClient;
 import com.niloortega.millionairemind.dto.ChatRequest;
 import com.niloortega.millionairemind.dto.ChatResponse;
 import com.niloortega.millionairemind.entity.ConversationEntity;
@@ -40,6 +42,9 @@ class ChatServiceTest {
 	private BookChunkRepository bookChunkRepository;
 
 	@Mock
+	private GeminiClient geminiClient;
+
+	@Mock
 	private ConversationRepository conversationRepository;
 
 	@Mock
@@ -49,7 +54,7 @@ class ChatServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		chatService = new ChatService(bookChunkRepository, conversationRepository, messageRepository, CLOCK);
+		chatService = new ChatService(geminiClient, bookChunkRepository, conversationRepository, messageRepository, CLOCK);
 		when(conversationRepository.save(any(ConversationEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 		when(messageRepository.save(any(MessageEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 	}
@@ -63,6 +68,8 @@ class ChatServiceTest {
 						8,
 						"Before you decide, pause and ask: Does this move me closer to who I want to become? Will I be proud of this tomorrow? Am I choosing comfort or growth?",
 						0.75)));
+		when(geminiClient.generateAnswer(eq("How should I think about assets?"), any()))
+				.thenReturn(Optional.of("Choose the path that aligns with who you want to become, not just what feels comfortable today."));
 
 		ChatResponse response = chatService.reply(request);
 
@@ -85,8 +92,8 @@ class ChatServiceTest {
 		assertThat(savedMessages.get(0).getCreatedAt()).isEqualTo(NOW);
 		assertThat(savedMessages.get(1).getConversation()).isEqualTo(conversation);
 		assertThat(savedMessages.get(1).getRole()).isEqualTo(MessageRole.ASSISTANT);
-		assertThat(savedMessages.get(1).getContent()).contains("Based on the saved Jewel #1 content");
-		assertThat(savedMessages.get(1).getContent()).contains("does this move me closer to who I want to become");
+		assertThat(savedMessages.get(1).getContent())
+				.isEqualTo("Choose the path that aligns with who you want to become, not just what feels comfortable today.");
 		assertThat(response.message()).isEqualTo(savedMessages.get(1).getContent());
 		assertThat(response.sources()).hasSize(1);
 		assertThat(response.sources().get(0).title()).isEqualTo("Jewels of the Millionaire Mind - chunk 8");
@@ -108,6 +115,24 @@ class ChatServiceTest {
 		assertThat(existingConversation.getUpdatedAt()).isEqualTo(NOW);
 		verify(conversationRepository).save(existingConversation);
 		verify(messageRepository, times(2)).save(any(MessageEntity.class));
+	}
+
+	@Test
+	void usesLocalChunkReplyWhenGeminiDoesNotReturnAnswer() {
+		when(bookChunkRepository.searchByText("How can I know I selected the best choice?", 3))
+				.thenReturn(List.of(searchResult(
+						"Jewels of the Millionaire Mind",
+						8,
+						"Before you decide, pause and ask: Does this move me closer to who I want to become? Will I be proud of this tomorrow? Am I choosing comfort or growth?",
+						0.75)));
+		when(geminiClient.generateAnswer(eq("How can I know I selected the best choice?"), any()))
+				.thenReturn(Optional.empty());
+
+		ChatResponse response = chatService.reply(new ChatRequest(null, "How can I know I selected the best choice?", null));
+
+		assertThat(response.message()).contains("Based on the saved Jewel #1 content");
+		assertThat(response.message()).contains("does this move me closer to who I want to become");
+		assertThat(response.sources()).hasSize(1);
 	}
 
 	@Test
