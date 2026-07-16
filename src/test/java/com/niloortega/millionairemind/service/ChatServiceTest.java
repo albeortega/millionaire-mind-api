@@ -62,7 +62,7 @@ class ChatServiceTest {
 	@Test
 	void createsConversationAndStoresUserAndAssistantMessages() {
 		ChatRequest request = new ChatRequest(null, "  How should I think about assets?  ", null);
-		when(bookChunkRepository.searchByText("How should I think about assets?", 3))
+		when(bookChunkRepository.searchByText("How should I think about assets?", 5))
 				.thenReturn(List.of(searchResult(
 						"Jewels of the Millionaire Mind",
 						8,
@@ -106,8 +106,8 @@ class ChatServiceTest {
 		ConversationEntity existingConversation =
 				new ConversationEntity(conversationId, "Original question", Instant.parse("2026-07-14T00:00:00Z"));
 		when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(existingConversation));
-		when(bookChunkRepository.searchByText("Continue", 3)).thenReturn(List.of());
-		when(bookChunkRepository.findFirstChunks(3)).thenReturn(List.of());
+		when(bookChunkRepository.searchByText("Continue", 5)).thenReturn(List.of());
+		when(bookChunkRepository.findFirstChunks(5)).thenReturn(List.of());
 
 		ChatResponse response = chatService.reply(new ChatRequest(conversationId, "Continue", null));
 
@@ -119,12 +119,14 @@ class ChatServiceTest {
 
 	@Test
 	void usesLocalChunkReplyWhenGeminiDoesNotReturnAnswer() {
-		when(bookChunkRepository.searchByText("How can I know I selected the best choice?", 3))
+		when(bookChunkRepository.findDecisionGuidanceChunks(5))
 				.thenReturn(List.of(searchResult(
 						"Jewels of the Millionaire Mind",
 						8,
 						"Before you decide, pause and ask: Does this move me closer to who I want to become? Will I be proud of this tomorrow? Am I choosing comfort or growth?",
 						0.75)));
+		when(bookChunkRepository.searchByText("How can I know I selected the best choice?", 5))
+				.thenReturn(List.of());
 		when(geminiClient.generateAnswer(eq("How can I know I selected the best choice?"), any()))
 				.thenReturn(Optional.empty());
 
@@ -136,9 +138,30 @@ class ChatServiceTest {
 	}
 
 	@Test
+	void usesLocalChunkReplyWhenGeminiClaimsFoundGuidanceIsInsufficient() {
+		when(bookChunkRepository.findDecisionGuidanceChunks(5))
+				.thenReturn(List.of(searchResult(
+						"Jewels of the Millionaire Mind",
+						8,
+						"Before you decide, pause and ask: Does this move me closer to who I want to become? Will I be proud of this tomorrow? Am I choosing comfort or growth?",
+						1.0)));
+		when(bookChunkRepository.searchByText("How can I know that I select the best choice?", 5))
+				.thenReturn(List.of());
+		when(geminiClient.generateAnswer(eq("How can I know that I select the best choice?"), any()))
+				.thenReturn(Optional.of("The provided text does not offer a specific step-by-step guide. I do not have enough book content yet."));
+
+		ChatResponse response = chatService.reply(new ChatRequest(null, "How can I know that I select the best choice?", null));
+
+		assertThat(response.message()).contains("Based on the saved Jewel #1 content");
+		assertThat(response.message()).contains("will I be proud of this tomorrow?");
+		assertThat(response.sources()).hasSize(1);
+	}
+
+	@Test
 	void returnsNoDataReplyWhenNoChunksExist() {
-		when(bookChunkRepository.searchByText("What should I choose?", 3)).thenReturn(List.of());
-		when(bookChunkRepository.findFirstChunks(3)).thenReturn(List.of());
+		when(bookChunkRepository.findDecisionGuidanceChunks(5)).thenReturn(List.of());
+		when(bookChunkRepository.searchByText("What should I choose?", 5)).thenReturn(List.of());
+		when(bookChunkRepository.findFirstChunks(5)).thenReturn(List.of());
 
 		ChatResponse response = chatService.reply(new ChatRequest(null, "What should I choose?", null));
 

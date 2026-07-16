@@ -26,6 +26,22 @@ public interface BookChunkRepository extends JpaRepository<BookChunkEntity, UUID
 			SELECT b.title AS bookTitle,
 			       bc.chunk_index AS chunkIndex,
 			       bc.content AS content,
+			       1.0 AS score
+			FROM book_chunks bc
+			JOIN books b ON b.id = bc.book_id
+			WHERE bc.content ILIKE '%Does this move me closer%'
+			   OR bc.content ILIKE '%What outcome do I truly want%'
+			   OR bc.content ILIKE '%future self%'
+			   OR bc.content ILIKE '%comfort or growth%'
+			ORDER BY bc.chunk_index ASC
+			LIMIT :limit
+			""", nativeQuery = true)
+	List<BookChunkSearchResult> findDecisionGuidanceChunks(@Param("limit") int limit);
+
+	@Query(value = """
+			SELECT b.title AS bookTitle,
+			       bc.chunk_index AS chunkIndex,
+			       bc.content AS content,
 			       0.0 AS score
 			FROM book_chunks bc
 			JOIN books b ON b.id = bc.book_id

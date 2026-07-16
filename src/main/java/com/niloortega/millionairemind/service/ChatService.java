@@ -14,7 +14,10 @@ import com.niloortega.millionairemind.repository.MessageRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -24,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatService {
 
 	private static final int MAX_TITLE_LENGTH = 80;
-	private static final int MAX_SOURCES = 3;
+	private static final int MAX_SOURCES = 5;
 	private static final String NO_DATA_REPLY =
 			"I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.";
 
@@ -83,12 +86,36 @@ public class ChatService {
 	}
 
 	private List<BookChunkSearchResult> searchChunks(String prompt) {
+		Map<Integer, BookChunkSearchResult> mergedResults = new LinkedHashMap<>();
+		if (isDecisionQuestion(prompt)) {
+			for (BookChunkSearchResult chunk : bookChunkRepository.findDecisionGuidanceChunks(MAX_SOURCES)) {
+				mergedResults.put(chunk.getChunkIndex(), chunk);
+			}
+		}
+
 		List<BookChunkSearchResult> matches = bookChunkRepository.searchByText(prompt, MAX_SOURCES);
 		if (!matches.isEmpty()) {
-			return matches;
+			for (BookChunkSearchResult chunk : matches) {
+				mergedResults.putIfAbsent(chunk.getChunkIndex(), chunk);
+			}
+			return mergedResults.values().stream().limit(MAX_SOURCES).toList();
+		}
+
+		if (!mergedResults.isEmpty()) {
+			return mergedResults.values().stream().limit(MAX_SOURCES).toList();
 		}
 
 		return bookChunkRepository.findFirstChunks(MAX_SOURCES);
+	}
+
+	private boolean isDecisionQuestion(String prompt) {
+		String normalized = prompt.toLowerCase(Locale.ROOT);
+		return normalized.contains("choice")
+				|| normalized.contains("choose")
+				|| normalized.contains("decide")
+				|| normalized.contains("decision")
+				|| normalized.contains("select")
+				|| normalized.contains("best");
 	}
 
 	private String generateReply(String prompt, List<BookChunkSearchResult> chunks) {
@@ -100,8 +127,18 @@ public class ChatService {
 				.map(BookChunkSearchResult::getContent)
 				.toList();
 
+		String localReply = composeReply(chunks);
 		return geminiClient.generateAnswer(prompt, contextChunks)
-				.orElseGet(() -> composeReply(chunks));
+				.filter(this::hasUsefulGeminiAnswer)
+				.orElse(localReply);
+	}
+
+	private boolean hasUsefulGeminiAnswer(String answer) {
+		String normalized = answer.toLowerCase(Locale.ROOT);
+		return !normalized.contains("do not have enough book content")
+				&& !normalized.contains("don't have enough book content")
+				&& !normalized.contains("does not offer a specific")
+				&& !normalized.contains("doesn't offer a specific");
 	}
 
 	private String composeReply(List<BookChunkSearchResult> chunks) {
