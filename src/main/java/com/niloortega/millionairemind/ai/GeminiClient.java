@@ -24,8 +24,8 @@ public class GeminiClient {
 	public GeminiClient(
 			RestClient.Builder restClientBuilder,
 			@Value("${app.gemini.api-key:}") String apiKey,
-			@Value("${app.gemini.model:gemini-3.1-flash-lite}") String model,
-			@Value("${app.gemini.api-url:https://generativelanguage.googleapis.com/v1beta/interactions}") String apiUrl) {
+			@Value("${app.gemini.model:gemini-2.0-flash}") String model,
+			@Value("${app.gemini.api-url:https://generativelanguage.googleapis.com/v1beta}") String apiUrl) {
 		this.restClient = restClientBuilder.build();
 		this.apiKey = apiKey;
 		this.model = model;
@@ -39,8 +39,7 @@ public class GeminiClient {
 
 		try {
 			JsonNode response = restClient.post()
-					.uri(apiUrl)
-					.header("x-goog-api-key", apiKey)
+					.uri("%s/models/%s:generateContent?key=%s".formatted(apiUrl, model, apiKey))
 					.body(requestBody(question, contextChunks))
 					.retrieve()
 					.body(JsonNode.class);
@@ -54,24 +53,25 @@ public class GeminiClient {
 
 	private Map<String, Object> requestBody(String question, List<String> contextChunks) {
 		return Map.of(
-				"model", model,
-				"store", false,
-				"system_instruction", """
-						You answer questions for the Millionaire Mind app.
-						Use only the provided Jewels of the Millionaire Mind context.
-						If the context is not enough, say you do not have enough book content yet.
-						Be warm, practical, concise, and do not invent quotes or facts.
-						""",
-				"input", """
-						Book context:
-						%s
+				"systemInstruction", Map.of(
+						"parts", List.of(Map.of(
+								"text", """
+										You answer questions for the Millionaire Mind app.
+										Use only the provided Jewels of the Millionaire Mind context.
+										If the context is not enough, say you do not have enough book content yet.
+										Be warm, practical, concise, and do not invent quotes or facts.
+										"""))),
+				"contents", List.of(Map.of(
+						"role", "user",
+						"parts", List.of(Map.of(
+								"text", """
+										Book context:
+										%s
 
-						User question:
-						%s
-						""".formatted(String.join("\n\n---\n\n", contextChunks), question),
-				"generation_config", Map.of(
-						"temperature", 0.4,
-						"thinking_level", "low"));
+										User question:
+										%s
+										""".formatted(String.join("\n\n---\n\n", contextChunks), question))))),
+				"generationConfig", Map.of("temperature", 0.4));
 	}
 
 	private Optional<String> extractText(JsonNode response) {
@@ -79,14 +79,18 @@ public class GeminiClient {
 			return Optional.empty();
 		}
 
-		String outputText = response.path("output_text").asText("");
-		if (!outputText.isBlank()) {
-			return Optional.of(outputText.trim());
-		}
-
-		JsonNode output = response.path("output");
-		if (output.isTextual() && !output.asText().isBlank()) {
-			return Optional.of(output.asText().trim());
+		JsonNode parts = response.path("candidates").path(0).path("content").path("parts");
+		if (parts.isArray()) {
+			StringBuilder text = new StringBuilder();
+			for (JsonNode part : parts) {
+				String partText = part.path("text").asText("");
+				if (!partText.isBlank()) {
+					text.append(partText);
+				}
+			}
+			if (!text.isEmpty()) {
+				return Optional.of(text.toString().trim());
+			}
 		}
 
 		return Optional.empty();
