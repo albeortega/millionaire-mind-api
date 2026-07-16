@@ -11,6 +11,8 @@ import com.niloortega.millionairemind.dto.ChatResponse;
 import com.niloortega.millionairemind.entity.ConversationEntity;
 import com.niloortega.millionairemind.entity.MessageEntity;
 import com.niloortega.millionairemind.entity.MessageRole;
+import com.niloortega.millionairemind.repository.BookChunkRepository;
+import com.niloortega.millionairemind.repository.BookChunkSearchResult;
 import com.niloortega.millionairemind.repository.ConversationRepository;
 import com.niloortega.millionairemind.repository.MessageRepository;
 import java.time.Clock;
@@ -35,6 +37,9 @@ class ChatServiceTest {
 			"I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.";
 
 	@Mock
+	private BookChunkRepository bookChunkRepository;
+
+	@Mock
 	private ConversationRepository conversationRepository;
 
 	@Mock
@@ -44,7 +49,7 @@ class ChatServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		chatService = new ChatService(conversationRepository, messageRepository, CLOCK);
+		chatService = new ChatService(bookChunkRepository, conversationRepository, messageRepository, CLOCK);
 		when(conversationRepository.save(any(ConversationEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 		when(messageRepository.save(any(MessageEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 	}
@@ -52,6 +57,12 @@ class ChatServiceTest {
 	@Test
 	void createsConversationAndStoresUserAndAssistantMessages() {
 		ChatRequest request = new ChatRequest(null, "  How should I think about assets?  ", null);
+		when(bookChunkRepository.searchByText("How should I think about assets?", 3))
+				.thenReturn(List.of(searchResult(
+						"Jewels of the Millionaire Mind",
+						8,
+						"Before you decide, pause and ask: Does this move me closer to who I want to become? Will I be proud of this tomorrow? Am I choosing comfort or growth?",
+						0.75)));
 
 		ChatResponse response = chatService.reply(request);
 
@@ -74,8 +85,11 @@ class ChatServiceTest {
 		assertThat(savedMessages.get(0).getCreatedAt()).isEqualTo(NOW);
 		assertThat(savedMessages.get(1).getConversation()).isEqualTo(conversation);
 		assertThat(savedMessages.get(1).getRole()).isEqualTo(MessageRole.ASSISTANT);
-		assertThat(savedMessages.get(1).getContent()).isEqualTo(NO_DATA_REPLY);
+		assertThat(savedMessages.get(1).getContent()).contains("Based on the saved Jewel #1 content");
+		assertThat(savedMessages.get(1).getContent()).contains("does this move me closer to who I want to become");
 		assertThat(response.message()).isEqualTo(savedMessages.get(1).getContent());
+		assertThat(response.sources()).hasSize(1);
+		assertThat(response.sources().get(0).title()).isEqualTo("Jewels of the Millionaire Mind - chunk 8");
 		assertThat(response.createdAt()).isEqualTo(NOW);
 	}
 
@@ -85,6 +99,8 @@ class ChatServiceTest {
 		ConversationEntity existingConversation =
 				new ConversationEntity(conversationId, "Original question", Instant.parse("2026-07-14T00:00:00Z"));
 		when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(existingConversation));
+		when(bookChunkRepository.searchByText("Continue", 3)).thenReturn(List.of());
+		when(bookChunkRepository.findFirstChunks(3)).thenReturn(List.of());
 
 		ChatResponse response = chatService.reply(new ChatRequest(conversationId, "Continue", null));
 
@@ -92,5 +108,40 @@ class ChatServiceTest {
 		assertThat(existingConversation.getUpdatedAt()).isEqualTo(NOW);
 		verify(conversationRepository).save(existingConversation);
 		verify(messageRepository, times(2)).save(any(MessageEntity.class));
+	}
+
+	@Test
+	void returnsNoDataReplyWhenNoChunksExist() {
+		when(bookChunkRepository.searchByText("What should I choose?", 3)).thenReturn(List.of());
+		when(bookChunkRepository.findFirstChunks(3)).thenReturn(List.of());
+
+		ChatResponse response = chatService.reply(new ChatRequest(null, "What should I choose?", null));
+
+		assertThat(response.message()).isEqualTo(NO_DATA_REPLY);
+		assertThat(response.sources()).isEmpty();
+	}
+
+	private BookChunkSearchResult searchResult(String title, Integer chunkIndex, String content, Double score) {
+		return new BookChunkSearchResult() {
+			@Override
+			public String getBookTitle() {
+				return title;
+			}
+
+			@Override
+			public Integer getChunkIndex() {
+				return chunkIndex;
+			}
+
+			@Override
+			public String getContent() {
+				return content;
+			}
+
+			@Override
+			public Double getScore() {
+				return score;
+			}
+		};
 	}
 }

@@ -2,13 +2,17 @@ package com.niloortega.millionairemind.service;
 
 import com.niloortega.millionairemind.dto.ChatRequest;
 import com.niloortega.millionairemind.dto.ChatResponse;
+import com.niloortega.millionairemind.dto.ChatSource;
 import com.niloortega.millionairemind.entity.ConversationEntity;
 import com.niloortega.millionairemind.entity.MessageEntity;
 import com.niloortega.millionairemind.entity.MessageRole;
+import com.niloortega.millionairemind.repository.BookChunkRepository;
+import com.niloortega.millionairemind.repository.BookChunkSearchResult;
 import com.niloortega.millionairemind.repository.ConversationRepository;
 import com.niloortega.millionairemind.repository.MessageRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,19 +23,29 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatService {
 
 	private static final int MAX_TITLE_LENGTH = 80;
+	private static final int MAX_SOURCES = 3;
 	private static final String NO_DATA_REPLY =
 			"I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.";
 
+	private final BookChunkRepository bookChunkRepository;
 	private final ConversationRepository conversationRepository;
 	private final MessageRepository messageRepository;
 	private final Clock clock;
 
 	@Autowired
-	public ChatService(ConversationRepository conversationRepository, MessageRepository messageRepository) {
-		this(conversationRepository, messageRepository, Clock.systemUTC());
+	public ChatService(
+			BookChunkRepository bookChunkRepository,
+			ConversationRepository conversationRepository,
+			MessageRepository messageRepository) {
+		this(bookChunkRepository, conversationRepository, messageRepository, Clock.systemUTC());
 	}
 
-	ChatService(ConversationRepository conversationRepository, MessageRepository messageRepository, Clock clock) {
+	ChatService(
+			BookChunkRepository bookChunkRepository,
+			ConversationRepository conversationRepository,
+			MessageRepository messageRepository,
+			Clock clock) {
+		this.bookChunkRepository = bookChunkRepository;
 		this.conversationRepository = conversationRepository;
 		this.messageRepository = messageRepository;
 		this.clock = clock;
@@ -44,15 +58,83 @@ public class ChatService {
 		ConversationEntity conversation = resolveConversation(request.conversationId(), prompt, createdAt);
 
 		messageRepository.save(new MessageEntity(conversation, MessageRole.USER, prompt, createdAt));
+		List<BookChunkSearchResult> matchingChunks = searchChunks(prompt);
+		String reply = composeReply(matchingChunks);
+		List<ChatSource> sources = matchingChunks.stream()
+				.map(chunk -> new ChatSource(
+						chunk.getBookTitle() + " - chunk " + chunk.getChunkIndex(),
+						excerpt(chunk.getContent()),
+						chunk.getScore()))
+				.toList();
 		MessageEntity assistantMessage =
-				messageRepository.save(new MessageEntity(conversation, MessageRole.ASSISTANT, NO_DATA_REPLY, createdAt));
+				messageRepository.save(new MessageEntity(conversation, MessageRole.ASSISTANT, reply, createdAt));
 
 		return new ChatResponse(
 				conversation.getId(),
 				"ASSISTANT",
 				assistantMessage.getContent(),
-				List.of(),
+				sources,
 				assistantMessage.getCreatedAt());
+	}
+
+	private List<BookChunkSearchResult> searchChunks(String prompt) {
+		List<BookChunkSearchResult> matches = bookChunkRepository.searchByText(prompt, MAX_SOURCES);
+		if (!matches.isEmpty()) {
+			return matches;
+		}
+
+		return bookChunkRepository.findFirstChunks(MAX_SOURCES);
+	}
+
+	private String composeReply(List<BookChunkSearchResult> chunks) {
+		if (chunks.isEmpty()) {
+			return NO_DATA_REPLY;
+		}
+
+		List<String> guidance = new ArrayList<>();
+		for (BookChunkSearchResult chunk : chunks) {
+			addGuidanceFromChunk(guidance, chunk.getContent());
+		}
+
+		if (guidance.isEmpty()) {
+			guidance.add("Pause before deciding and ask what outcome you truly want.");
+			guidance.add("Choose the option that brings you closer to who you want to become.");
+			guidance.add("Notice whether you are choosing comfort or growth.");
+		}
+
+		return "Based on the saved Jewel #1 content, the best choice is not the easiest one; it is the one aligned "
+				+ "with who you want to become. " + String.join(" ", guidance);
+	}
+
+	private void addGuidanceFromChunk(List<String> guidance, String content) {
+		String lowerContent = content.toLowerCase();
+		if (lowerContent.contains("does this move me closer") && guidance.size() < 3) {
+			guidance.add("Ask: does this move me closer to who I want to become?");
+		}
+		if (lowerContent.contains("will i be proud") && guidance.size() < 3) {
+			guidance.add("Ask: will I be proud of this tomorrow?");
+		}
+		if (lowerContent.contains("comfort or growth") && guidance.size() < 3) {
+			guidance.add("Ask: am I choosing comfort or growth?");
+		}
+		if (lowerContent.contains("future self") && guidance.size() < 3) {
+			guidance.add("Ask what your future self would choose today.");
+		}
+		if (lowerContent.contains("values") && guidance.size() < 3) {
+			guidance.add("Let your values guide you more than outside pressure.");
+		}
+		if (lowerContent.contains("regret") && guidance.size() < 3) {
+			guidance.add("Remember that loneliness or discomfort can be cheaper than regret.");
+		}
+	}
+
+	private String excerpt(String content) {
+		String normalized = content.replaceAll("\\s+", " ").trim();
+		if (normalized.length() <= 240) {
+			return normalized;
+		}
+
+		return normalized.substring(0, 240).trim() + "...";
 	}
 
 	private ConversationEntity resolveConversation(UUID conversationId, String prompt, Instant now) {
