@@ -31,6 +31,8 @@ class ChatServiceTest {
 
 	private static final Instant NOW = Instant.parse("2026-07-15T00:00:00Z");
 	private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+	private static final String NO_DATA_REPLY =
+			"I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.";
 
 	@Mock
 	private ConversationRepository conversationRepository;
@@ -72,6 +74,7 @@ class ChatServiceTest {
 		assertThat(savedMessages.get(0).getCreatedAt()).isEqualTo(NOW);
 		assertThat(savedMessages.get(1).getConversation()).isEqualTo(conversation);
 		assertThat(savedMessages.get(1).getRole()).isEqualTo(MessageRole.ASSISTANT);
+		assertThat(savedMessages.get(1).getContent()).isEqualTo(NO_DATA_REPLY);
 		assertThat(response.message()).isEqualTo(savedMessages.get(1).getContent());
 		assertThat(response.createdAt()).isEqualTo(NOW);
 	}

@@ -18,8 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatService {
 
 	private static final int MAX_TITLE_LENGTH = 80;
-	private static final String PLACEHOLDER_REPLY =
-			"The chat API is ready. RAG retrieval and Gemini generation will be connected next.";
+	private static final String NO_DATA_REPLY =
+			"I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.";
 
 	private final ConversationRepository conversationRepository;
 	private final MessageRepository messageRepository;
@@ -43,7 +43,7 @@ public class ChatService {
 
 		messageRepository.save(new MessageEntity(conversation, MessageRole.USER, prompt, createdAt));
 		MessageEntity assistantMessage =
-				messageRepository.save(new MessageEntity(conversation, MessageRole.ASSISTANT, PLACEHOLDER_REPLY, createdAt));
+				messageRepository.save(new MessageEntity(conversation, MessageRole.ASSISTANT, NO_DATA_REPLY, createdAt));
 
 		return new ChatResponse(
 				conversation.getId(),

@@ -35,7 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class ChatControllerTest {
 
 	private static final String ASSISTANT_REPLY =
-			"The chat API is ready. RAG retrieval and Gemini generation will be connected next.";
+			"I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.";
 	private static final UUID DEFAULT_CONVERSATION_ID = UUID.fromString("f3b18c5c-c9cc-4791-a55b-3975c67c5b85");
 	private static final Instant CREATED_AT = Instant.parse("2026-07-15T00:00:00Z");
 

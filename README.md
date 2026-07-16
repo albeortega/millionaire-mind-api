@@ -78,7 +78,7 @@ Response body:
 {
   "conversationId": "generated-or-existing-conversation-uuid",
   "role": "ASSISTANT",
-  "message": "The chat API is ready. RAG retrieval and Gemini generation will be connected next.",
+  "message": "I do not have enough book content loaded yet to answer that from Jewels of the Millionaire Mind.",
   "sources": [],
   "createdAt": "2026-07-14T00:00:00Z"
 }
